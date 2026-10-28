@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S&P500 Opportunity Scanner Pro</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">&#9670;</div>
+        <span>Escáner de Oportunidades</span>
+      </div>
+      <div class="header-controls">
+        <select id="sectorFilter" class="filter-select"></select>
+        <select id="tfSelect" class="filter-select" title="Cálculo técnico del cruce en estas velas">
+          <option value="1d">Diario</option>
+          <option value="4h">4 horas</option>
+        </select>
+        <select id="sortSelect" class="filter-select">
+          <option value="long">Ordenar por Señales (20)</option>
+          <option value="score">Ordenar por Puntaje</option>
+          <option value="upside">Ordenar por Potencial</option>
+          <option value="ticker">Ordenar por Ticker</option>
+          <option value="price">Ordenar por Precio</option>
+          <option value="change">Ordenar por &#37; Hoy</option>
+          <option value="rsi">Ordenar por RSI</option>
+          <option value="dma200">Ordenar por Dist. MA200</option>
+          <option value="vwap">Ordenar por Dist. VWAP</option>
+          <option value="stage">Ordenar por Etapa Weinstein</option>
+          <option value="risk">Ordenar por Riesgo</option>
+        </select>
+        <button id="scanBtn" class="scan-btn">
+          <span class="spinner"></span>
+          <span class="btn-text">Escanear S&P500</span>
+        </button>
+      </div>
+    </div>
+    <div class="loading-bar" id="loadingBar"></div>
+  </header>
+
+  <div class="tab-bar main-tabs">
+    <button class="tab-btn active" data-tabpanel="scanner">Escáner</button>
+    <button class="tab-btn" data-tabpanel="heatmap">Mapa de Calor</button>
+    <button class="tab-btn" data-tabpanel="watchlist">Seguimiento <span class="watchlist-badge" id="watchlistBadge">0</span></button>
+    <button class="tab-btn" data-tabpanel="compare">Comparar</button>
+    <button class="tab-btn" data-tabpanel="stages">Etapas Weinstein</button>
+    <button class="tab-btn" data-tabpanel="resumen">Resumen</button>
+  </div>
+
+  <div class="main-content">
+    <!-- SCANNER TAB -->
+    <div class="tab-panel active" id="panelScanner">
+      <div class="panel-section scanner-panel">
+        <div class="panel-header">
+          <span class="panel-title">Ranking de Oportunidades</span>
+          <div class="panel-header-controls">
+            <span class="mode-indicator" id="modeIndicator"></span>
+          </div>
+        </div>
+        <div class="scanner-stats" id="scannerStats">
+          <span class="stat-item">Acciones: <span class="stat-value" id="totalCount">0</span></span>
+          <span class="stat-item"><span class="dot dot-green"></span> Fuertes: <span class="stat-value" id="strongCount">0</span></span>
+          <span class="stat-item"><span class="dot dot-yellow"></span> Moderadas: <span class="stat-value" id="moderateCount">0</span></span>
+          <span class="stat-item"><span class="dot dot-red"></span> Débiles: <span class="stat-value" id="weakCount">0</span></span>
+        </div>
+        <div class="scan-progress" id="scanProgress">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progressFill"></div>
+          </div>
+          <span class="progress-text" id="progressText">0 / 0</span>
+          <span class="progress-text" id="currentTicker" style="min-width:80px;text-align:right"></span>
+        </div>
+        <div class="table-wrapper" id="tableWrapper">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-state-icon">&#9670;</div>
+            <div class="empty-state-title">Listo para escanear</div>
+            <div class="empty-state-text">Haz clic en <strong>"Escanear S&P500"</strong> para encontrar oportunidades infravaloradas. El escáner analiza fundamentales y técnicos de más de 130 acciones con CEDEAR/ADR (comprables desde Argentina).</div>
+          </div>
+          <table class="ranking-table" id="rankingTable" style="display:none">
+            <thead>
+              <tr>
+                <th data-sort="rank" class="sorted">#</th>
+                <th data-sort="ticker">Ticker</th>
+                <th data-sort="name">Nombre</th>
+                <th data-sort="sector" class="hide-mobile">Sector</th>
+                <th data-sort="price">Precio</th>
+                <th data-sort="change" title="Cambio % de la última sesión bursátil">&#37; Hoy</th>
+                <th data-sort="beta" class="hide-mobile" title="Beta de la acci&oacute;n original (subyacente), no del CEDEAR">Beta</th>
+                <th data-sort="rsi">RSI</th>
+                <th data-sort="macd" class="hide-mobile">MACD</th>
+                <th class="hide-mobile">Cruce SMA</th>
+                <th class="hide-mobile" title="Cruce de medias SMA3 y SMA9 en gráfico diario">Cruce 3/9</th>
+                <th class="hide-mobile">Tend MA200</th>
+                <th data-sort="dma200" class="hide-mobile">Dist MA200</th>
+                <th data-sort="dma30" class="hide-mobile">Dist MA30</th>
+                <th data-sort="dwma21" class="hide-mobile">Dist WMA21</th>
+                <th data-sort="dpoc" class="hide-mobile" title="Distancia % al POC (precio de mayor volumen negociado)">Dist POC</th>
+                <th data-sort="vwap" class="hide-mobile" title="Distancia % al VWAP">VWAP</th>
+                <th data-sort="stage" class="hide-mobile" title="Etapa de Weinstein">Etapa</th>
+                <th data-sort="long" class="sorted">Señales</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel-section detail-panel" id="detailPanel">
+        <div class="detail-content" id="detailContent">
+          <div class="detail-empty" id="detailEmpty">
+            <div class="detail-empty-icon">&#9670;</div>
+            <div class="detail-empty-text">Selecciona una acción del ranking para ver el análisis detallado</div>
+          </div>
+          <div id="detailView" style="display:none">
+            <div class="detail-header">
+              <div>
+                <div class="detail-ticker" id="detailTicker"></div>
+                <div class="detail-name" id="detailName"></div>
+              </div>
+              <div style="text-align:right">
+                <div class="detail-price" id="detailPrice"></div>
+                <div class="detail-change" id="detailChange"></div>
+                <button class="watchlist-toggle" id="watchlistToggle">+ Seguimiento</button>
+              </div>
+            </div>
+
+            <div class="detail-score-large" id="detailScoreBox">
+              <div class="score-circle" id="scoreCircle">--</div>
+              <div>
+                <div class="score-grade" id="scoreGrade"></div>
+                <div class="score-label" id="scoreLabel">Puntaje de Confluencia</div>
+                <div class="score-breakdown" id="scoreBreakdown"></div>
+              </div>
+            </div>
+
+            <div class="metrics-grid" id="metricsGrid"></div>
+
+            <div class="tab-bar detail-tabs">
+              <button class="tab-btn active" data-tab="explanation">Análisis IA</button>
+              <button class="tab-btn" data-tab="fundamentals">Fundamentales</button>
+              <button class="tab-btn" data-tab="technicals">Técnicos</button>
+              <button class="tab-btn" data-tab="breakdown">Desglose</button>
+            </div>
+
+            <div class="tab-content active" id="tabExplanation">
+              <div class="explanation-box" id="explanationBox"></div>
+            </div>
+
+            <div class="tab-content" id="tabFundamentals">
+              <div id="fundamentalBreakdown"></div>
+            </div>
+
+            <div class="tab-content" id="tabTechnicals">
+              <div id="technicalBreakdown"></div>
+            </div>
+
+            <div class="tab-content" id="tabBreakdown">
+              <div id="scoreBreakdownTab"></div>
+            </div>
+
+            <div class="chart-section">
+              <div class="chart-container">
+                <canvas id="stockChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-overlay" id="detailOverlay"></div>
+    </div>
+
+    <!-- HEATMAP TAB -->
+    <div class="tab-panel" id="panelHeatmap">
+      <div class="panel-section" style="padding:16px">
+        <div class="panel-header" style="padding:0 0 12px;border:none">
+          <span class="panel-title">Mapa de Calor por Sector</span>
+        </div>
+        <div class="heatmap-controls">
+          <span class="heatmap-legend"><span class="legend-dot" style="background:#1b6e3d"></span> Fuerte &nbsp;<span class="legend-dot" style="background:#c4a400"></span> Regular &nbsp;<span class="legend-dot" style="background:#9a1f1f"></span> Débil</span>
+        </div>
+        <div class="heatmap-container">
+          <canvas id="heatmapCanvas"></canvas>
+        </div>
+        <div class="heatmap-empty" id="heatmapEmpty">
+          <div class="empty-state-text">Escanea primero las acciones para generar el mapa de calor, o haz clic en <strong>Escanear S&P500</strong> arriba.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BACKTEST TAB -->
+    <div class="tab-panel" id="panelBacktest">
+      <div class="panel-section" style="padding:16px">
+        <div class="panel-header" style="padding:0 0 12px;border:none">
+          <span class="panel-title">Backtest de Portafolio</span>
+        </div>
+        <div class="backtest-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Fecha Inicio</label>
+              <input type="date" id="btStartDate" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha Fin</label>
+              <input type="date" id="btEndDate" class="form-input">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Precio Entrada</label>
+              <input type="number" id="btEntryPrice" class="form-input" placeholder="Automático">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ticker</label>
+              <input type="text" id="btTicker" class="form-input" placeholder="e.g. AAPL" style="text-transform:uppercase">
+            </div>
+          </div>
+          <div class="form-row">
+            <button id="btRunBtn" class="scan-btn">Ejecutar Backtest</button>
+            <button id="btBatchBtn" class="scan-btn" style="background:var(--accent-fuchsia)">Lote Top 10</button>
+          </div>
+        </div>
+        <div id="btResults" class="backtest-results">
+          <div class="bt-empty" id="btEmpty">
+            <div class="empty-state-text">Ejecuta un backtest para ver resultados</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WATCHLIST TAB -->
+    <div class="tab-panel" id="panelWatchlist">
+      <div class="panel-section" style="padding:16px">
+        <div class="panel-header" style="padding:0 0 12px;border:none">
+          <span class="panel-title">Mi Lista de Seguimiento</span>
+        </div>
+        <div id="watchlistContent">
+          <div class="watchlist-empty" id="watchlistEmpty">
+            <div class="empty-state-icon">&#9734;</div>
+            <div class="empty-state-text">No hay acciones guardadas. Usa el botón <strong>+ Seguimiento</strong> en cualquier acción para guardarla aquí.</div>
+          </div>
+          <div id="watchlistTableWrapper" style="display:none">
+            <table class="ranking-table" id="watchlistTable">
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Nombre</th>
+                  <th>Sector</th>
+                  <th>Puntaje</th>
+                  <th>Añadido</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="watchlistBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPARE TAB -->
+    <div class="tab-panel" id="panelCompare">
+      <div class="panel-section" style="padding:16px">
+        <div class="panel-header" style="padding:0 0 14px;border:none">
+          <span class="panel-title">Comparar Acciones</span>
+        </div>
+        <div class="compare-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Acción A</label>
+              <input type="text" id="compTickerA" class="form-input" placeholder="AAPL" style="text-transform:uppercase;font-weight:700;font-size:1.1rem">
+            </div>
+            <div class="form-group" style="flex:0 0 auto;align-self:flex-end;padding-bottom:4px">
+              <span style="font-size:1.2rem;color:var(--text-muted)">vs</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Acción B</label>
+              <input type="text" id="compTickerB" class="form-input" placeholder="MSFT" style="text-transform:uppercase;font-weight:700;font-size:1.1rem">
+            </div>
+            <div class="form-group" style="flex:0 0 auto">
+              <button id="compBtn" class="scan-btn" style="background:linear-gradient(135deg,var(--accent-celeste),var(--accent-fuchsia))">Comparar</button>
+            </div>
+          </div>
+        </div>
+        <div id="compResults" class="compare-results">
+          <div class="bt-empty" id="compEmpty">
+            <div class="empty-state-text">Ingresa dos tickers para comparar sus fundamentales</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGES TAB -->
+    <div class="tab-panel" id="panelStages">
+      <div class="panel-section" style="padding:16px">
+        <div class="panel-header" style="padding:0 0 14px;border:none">
+          <span class="panel-title">Análisis de Etapas (Weinstein)</span>
+        </div>
+        <div class="stages-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Ticker</label>
+              <input type="text" id="stageTicker" class="form-input" placeholder="AAPL" style="text-transform:uppercase;font-weight:700;font-size:1.1rem">
+            </div>
+            <div class="form-group" style="flex:0 0 auto">
+              <button id="stageBtn" class="scan-btn" style="background:linear-gradient(135deg,var(--accent-celeste),var(--accent-fuchsia))">Analizar Etapa</button>
+            </div>
+          </div>
+        </div>
+        <div id="stageResults">
+          <div class="stages-empty" id="stageEmpty">
+            <div class="empty-state-text">Ingresa un ticker para analizar su etapa según el método de Stan Weinstein (WMA30, volumen, soportes y resistencias).</div>
+          </div>
+          <div id="stageDetail" style="display:none">
+            <div class="stage-header">
+              <div>
+                <span class="stage-ticker" id="stageTickerLabel"></span>
+                <span class="stage-name" id="stageNameLabel"></span>
+              </div>
+              <div class="stage-badge" id="stageBadge"></div>
+            </div>
+            <div class="stage-summary" id="stageSummary"></div>
+            <div class="stage-description" id="stageDescription"></div>
+            <div class="stage-grid" id="stageGrid"></div>
+            <div class="stage-chart-section">
+              <div class="stage-chart-container">
+                <canvas id="stageChart"></canvas>
+              </div>
+              <div class="stage-legend">
+                <span><span class="legend-dot" style="background:var(--accent-celeste)"></span> Precio Semanal</span>
+                <span><span class="legend-dot" style="background:var(--accent-fuchsia)"></span> WMA30</span>
+              </div>
+            </div>
+            <div class="stage-signals" id="stageSignals"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESUMEN TAB -->
+    <div class="tab-panel" id="panelResumen">
+      <div class="panel-section" style="padding:16px">
+        <div class="panel-header" style="padding:0 0 12px;border:none">
+          <span class="panel-title">Informe de Oportunidades</span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button id="exportReportBtn" class="scan-btn" style="background:linear-gradient(135deg,var(--accent-green),var(--accent-celeste));font-size:0.75rem;padding:4px 12px">Exportar</button>
+            <button id="emailConfigToggleBtn" class="scan-btn" style="background:linear-gradient(135deg,var(--accent-fuchsia),var(--accent-purple));font-size:0.75rem;padding:4px 12px">&#9993; Email</button>
+          </div>
+        </div>
+        <div id="emailConfigPanel" class="email-config-panel" style="display:none;margin-bottom:12px;padding:12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md)">
+          <div style="font-size:0.8rem;font-weight:600;margin-bottom:8px;color:var(--text-primary)">Enviar informe por email</div>
+          <div class="form-row" style="gap:6px;flex-wrap:wrap">
+            <div class="form-group" style="flex:1;min-width:180px">
+              <label class="form-label" style="font-size:0.7rem">Email</label>
+              <input type="email" id="emailAddr" class="form-input" placeholder="tu@email.com" style="font-size:0.8rem;padding:6px 10px">
+            </div>
+            <div class="form-group" style="flex:1;min-width:180px">
+              <label class="form-label" style="font-size:0.7rem">Contraseña / App Password</label>
+              <input type="password" id="emailPass" class="form-input" placeholder="contraseña" style="font-size:0.8rem;padding:6px 10px">
+            </div>
+            <div class="form-group" style="flex:0 1 120px">
+              <label class="form-label" style="font-size:0.7rem">SMTP Host</label>
+              <input type="text" id="smtpHost" class="form-input" placeholder="smtp.gmail.com" value="smtp.gmail.com" style="font-size:0.8rem;padding:6px 10px">
+            </div>
+            <div class="form-group" style="flex:0 1 70px">
+              <label class="form-label" style="font-size:0.7rem">Puerto</label>
+              <input type="number" id="smtpPort" class="form-input" value="587" style="font-size:0.8rem;padding:6px 10px">
+            </div>
+            <div class="form-group" style="flex:0 0 auto;align-self:flex-end;padding-bottom:2px">
+              <button id="sendReportEmailBtn" class="scan-btn" style="font-size:0.72rem;padding:6px 14px;background:linear-gradient(135deg,var(--accent-celeste),var(--accent-blue))">Enviar</button>
+            </div>
+          </div>
+          <div id="emailStatus" style="font-size:0.72rem;margin-top:6px;color:var(--text-muted)"></div>
+          <div style="font-size:0.62rem;color:var(--text-muted);margin-top:4px">Para Gmail: usa una <strong>Contraseña de Aplicación</strong> (no tu contraseña normal). Activa 2FA y genera una en tu cuenta de Google.</div>
+        </div>
+        <div id="reportContent">
+          <div class="report-empty" id="reportEmpty">
+            <div class="empty-state-icon">&#9670;</div>
+            <div class="empty-state-text">Escanea el mercado primero para generar el informe de oportunidades.</div>
+          </div>
+          <div id="reportReady" style="display:none">
+            <div class="report-header" id="reportHeader"></div>
+            <div class="report-summary-cards" id="reportSummaryCards"></div>
+            <div class="report-section">
+              <div class="report-section-title">&#9733; Mejores Recomendaciones</div>
+              <div class="report-picks" id="reportPicks"></div>
+            </div>
+            <div class="report-section">
+              <div class="report-section-title">&#9670; Distribución por Sector</div>
+              <div class="report-sector-grid" id="reportSectorGrid"></div>
+            </div>
+            <div class="report-section">
+              <div class="report-section-title">&#9889; Oportunidades Extremas</div>
+              <div id="reportExtreme"></div>
+            </div>
+            <div class="report-section">
+              <div class="report-section-title">&#9733; Calidad en Venta</div>
+              <div id="reportQuality"></div>
+            </div>
+            <div class="report-section">
+              <div class="report-section-title">&#9888; Resumen de Riesgos</div>
+              <div id="reportRisks"></div>
+            </div>
+            <div class="report-footer" id="reportFooter"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SWING TAB -->
+    <div class="tab-panel" id="panelSwing">
+      <div class="panel-section" style="padding:16px">
+        <div class="panel-header" style="padding:0 0 12px;border:none">
+          <span class="panel-title">Swing Trading — Filtro Técnico</span>
+          <button id="runSwingFilterBtn" class="scan-btn" style="background:linear-gradient(135deg,var(--accent-celeste),var(--accent-fuchsia));font-size:0.75rem;padding:4px 14px">Filtrar</button>
+        </div>
+        <div id="swingCriteria" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:12px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm)">
+          <strong>Condiciones:</strong> Precio &gt; SMA200 &bull; SMA50 &gt; SMA200 &bull; EMA20 &gt; EMA50 &bull; Pullback 3-7d &bull; MACD cruce alcista 1-3d &bull; RSI 40-70
+        </div>
+        <div id="swingStatus" style="font-size:0.75rem;margin-bottom:8px;color:var(--text-muted)"></div>
+        <div id="swingResults">
+          <div class="swing-empty" id="swingEmpty">
+            <div class="empty-state-icon">&#9670;</div>
+            <div class="empty-state-text">Escanea el mercado primero, luego haz clic en <strong>Filtrar</strong> para encontrar oportunidades de swing trading.</div>
+          </div>
+          <div id="swingTableWrapper" style="display:none">
+            <div id="swingSummary" style="margin-bottom:10px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:0.75rem"></div>
+            <div style="overflow-x:auto">
+              <table class="swing-table" id="swingTable">
+                <thead>
+                  <tr>
+                    <th>Ticker</th>
+                    <th>Precio</th>
+                    <th>Cambio</th>
+                    <th>SMA200</th>
+                    <th>SMA50</th>
+                    <th>EMA20</th>
+                    <th>RSI(14)</th>
+                    <th>MACD(cruce)</th>
+                    <th>Justificación</th>
+                  </tr>
+                </thead>
+                <tbody id="swingBody"></tbody>
+              </table>
+            </div>
+            <div id="swingBest" style="margin-top:12px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);font-size:0.75rem"></div>
+          </div>
+        </div>
+        <div id="swingTop10Section" style="display:none;margin-top:16px">
+          <div class="panel-header" style="padding:0 0 8px;border:none">
+            <span class="panel-title" style="font-size:0.85rem">&#9733; Top 10 Mejores Condiciones de Compra</span>
+            <span style="font-size:0.65rem;color:var(--text-muted)">De todas las acciones analizadas</span>
+          </div>
+          <div id="swingTop10Status" style="font-size:0.75rem;margin-bottom:8px;color:var(--text-muted)"></div>
+          <div style="overflow-x:auto">
+            <table class="swing-table" id="swingTop10Table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Ticker</th>
+                  <th>Precio</th>
+                  <th>Cambio</th>
+                  <th>RSI(14)</th>
+                  <th>Puntaje</th>
+                  <th>Razones</th>
+                </tr>
+              </thead>
+              <tbody id="swingTop10Body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/engine/technical.js"></script>
+  <script src="js/engine/fundamentals.js"></script>
+  <script src="js/engine/scoring.js"></script>
+  <script src="js/engine/explanations.js"></script>
+  <script src="js/engine/backtesting.js"></script>
+  <script src="js/engine/heatmap.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/comparison.js"></script>
+  <script src="js/weinstein.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/swing.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
